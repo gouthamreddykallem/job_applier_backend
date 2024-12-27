@@ -93,6 +93,56 @@ graph TB
 
 ## 3. System Workflow
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant API as API Server
+    participant LLM as LLM Service
+    participant PW as Playwright
+    participant DB as Database
+    participant CP as Company Portal
+
+    U->>API: Submit Application Request
+    activate API
+    API->>DB: Store Request
+    API->>LLM: Analyze Resume & Job Match
+    activate LLM
+    LLM-->>API: Match Score & Recommendations
+    deactivate LLM
+    
+    alt Match Score > Threshold
+        API->>PW: Initialize Application Process
+        activate PW
+        PW->>CP: Navigate to Job Portal
+        CP-->>PW: Load Portal
+        PW->>CP: Search Job Position
+        CP-->>PW: Job Listing
+        
+        PW->>LLM: Verify Job Details
+        activate LLM
+        LLM-->>PW: Confirmation
+        deactivate LLM
+        
+        PW->>CP: Fill Application Form
+        CP-->>PW: Form Validation
+        
+        alt Form Valid
+            PW->>CP: Submit Application
+            CP-->>PW: Submission Confirmation
+            PW-->>API: Success Status
+        else Form Invalid
+            PW-->>API: Validation Error
+        end
+        deactivate PW
+    else Match Score < Threshold
+        API-->>U: Job Not Suitable
+    end
+    
+    API->>DB: Update Application Status
+    API-->>U: Application Status
+    deactivate API
+```
+
 ### 3.1 Input Processing
 - Resume parsing and analysis
 - Job requirement extraction
@@ -121,6 +171,59 @@ graph TB
    - Status tracking
    - Response monitoring
    - Analytics collection
+
+```mermaid
+flowchart TD
+    subgraph Input
+        R[Resume]
+        J[Job Requirements]
+        U[User Preferences]
+    end
+
+    subgraph Processing
+        RP[Resume Parser]
+        JP[Job Parser]
+        MS[Match Scorer]
+        CG[Content Generator]
+    end
+
+    subgraph AIProcessing
+        VS[Vector Store]
+        LLM[LLM Service]
+        LC[LangChain]
+    end
+
+    subgraph ApplicationProcess
+        AF[Application Filler]
+        VM[Validation Module]
+        SM[Submission Module]
+    end
+
+    subgraph Storage
+        DB[(Database)]
+        Cache[(Redis Cache)]
+    end
+
+    R --> RP
+    J --> JP
+    U --> MS
+
+    RP --> VS
+    JP --> VS
+    VS --> LLM
+    LLM --> LC
+
+    LC --> MS
+    MS --> CG
+    CG --> AF
+
+    AF --> VM
+    VM --> SM
+    SM --> DB
+    DB --> Cache
+
+    class AIProcessing,Processing,ApplicationProcess highlight
+```
 
 ## 4. Advanced Features
 
@@ -153,6 +256,45 @@ graph TB
 - Submitted
 - Failed
 - Complete
+
+```mermaid
+stateDiagram-v2
+    [*] --> Initiated
+    Initiated --> Analysis: Resume Uploaded
+    
+    state Analysis {
+        [*] --> JobMatching
+        JobMatching --> ContentGeneration
+        ContentGeneration --> [*]
+    }
+    
+    Analysis --> Ready: Match Score > Threshold
+    Analysis --> Rejected: Match Score < Threshold
+    
+    Ready --> InProgress: Start Application
+    
+    state InProgress {
+        [*] --> NavigatingPortal
+        NavigatingPortal --> FillingForm
+        FillingForm --> ValidatingForm
+        ValidatingForm --> SubmittingForm
+    }
+    
+    InProgress --> Submitted: Success
+    InProgress --> Failed: Error
+    
+    state Failed {
+        [*] --> RetryQueue
+        RetryQueue --> MaxRetries
+        RetryQueue --> BackToReady: Retry Available
+    }
+    
+    Submitted --> Complete
+    Failed --> Complete: Max Retries Reached
+    Rejected --> Complete
+    
+    Complete --> [*]
+```
 
 ### 5.2 State Transitions
 - Validation checkpoints
@@ -219,10 +361,10 @@ graph TB
 ## 10. API Documentation
 
 ### 10.1 Main Endpoints
-- `/api/v1/applications/initiate`
-- `/api/v1/applications/status`
-- `/api/v1/analytics`
-- `/api/v1/system/health`
+- `/api/v0/applications/initiate`
+- `/api/v0/applications/status`
+- `/api/v0/analytics`
+- `/api/v0/system/health`
 
 ### 10.2 Authentication
 - JWT-based authentication
