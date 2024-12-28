@@ -1,34 +1,18 @@
 # Automated Job Application System Documentation
 
 ## 1. Overview
-The Automated Job Application System is an advanced, AI-driven platform designed to automate and optimize the job application process. By leveraging LangChain, LLMs, and modern web automation technologies, the system provides intelligent job matching, automated application submission, and comprehensive tracking capabilities.
+The Automated Job Application System is an advanced, AI-driven platform designed to automate and optimize the job application process. By leveraging LangChain and LLMs for intelligent decision-making in conjunction with Playwright for web automation, the system creates a sophisticated job application automation solution with AI-guided browsing capabilities.
 
 ## 2. System Architecture
 
+The current architecture already includes LLM and LangChain services, but we'll enhance their integration with Playwright:
+
 ```mermaid
 graph TB
-    subgraph Client
-        UI[Web UI/API Interface]
-    end
-
-    subgraph LoadBalancer
-        LB[Load Balancer]
-    end
-
-    subgraph ApplicationServers
-        API[FastAPI Server]
-        Worker1[Application Worker 1]
-        Worker2[Application Worker 2]
-    end
-
-    subgraph MessageQueue
-        RMQ[RabbitMQ]
-    end
-
-    subgraph AIServices
+    subgraph AIDecisionLayer
         LLM[LLM Service]
         LC[LangChain Service]
-        VS[Vector Store]
+        DM[Decision Manager]
     end
 
     subgraph AutomationServices
@@ -37,359 +21,248 @@ graph TB
         PS[Proxy Service]
     end
 
-    subgraph Storage
-        DB[(PostgreSQL)]
-        Cache[(Redis)]
-        FS[File Storage]
-    end
-
-    subgraph Monitoring
-        Sentry
-        Grafana
-        Prometheus
-    end
-
-    UI --> LB
-    LB --> API
-    API --> RMQ
-    RMQ --> Worker1
-    RMQ --> Worker2
-    Worker1 & Worker2 --> LLM
-    Worker1 & Worker2 --> LC
-    Worker1 & Worker2 --> VS
-    Worker1 & Worker2 --> PW
+    DM --> PW
+    LLM --> DM
+    LC --> DM
     PW --> SC
     PW --> PS
-    API & Worker1 & Worker2 --> DB
-    API & Worker1 & Worker2 --> Cache
-    API & Worker1 & Worker2 --> FS
-    API & Worker1 & Worker2 --> Sentry
-    Prometheus --> Grafana
-    API & Worker1 & Worker2 --> Prometheus
 ```
 
-### 2.1 Core Components
-- **Client Layer:** Web UI/API interface for user interactions
-- **Application Layer:** FastAPI-based distributed system
-- **AI Services:** LLM and LangChain integration for intelligent processing
-- **Automation Services:** Playwright-based web automation
-- **Storage Layer:** Multi-tiered data storage system
-- **Monitoring Stack:** Comprehensive system observability
+### 2.1 Enhanced AI-Guided Components
+- **AI Decision Layer:**
+  - LLM-based page analysis
+  - Dynamic decision making for navigation
+  - Form-filling strategy generation
+  - Content validation and verification
+  - Error recovery planning
 
-### 2.2 Tech Stack
-- **Backend Framework:** FastAPI
+- **Browser Automation Layer:**
+  - Playwright-driven execution
+  - AI-guided navigation
+  - Intelligent form interaction
+  - Dynamic content handling
+  - Error state management
+
+### 2.2 Tech Stack Updates
 - **AI/ML Stack:** 
-  - LangChain for orchestration
-  - Open-source LLMs for decision making
-  - Vector Store (Pinecone/Weaviate) for semantic search
-- **Message Queue:** RabbitMQ for job distribution
-- **Databases:**
-  - PostgreSQL for persistent storage
-  - Redis for caching and session management
-  - Vector Database for embedding storage
-- **Web Automation:** Playwright with Selenium fallback
-- **Containerization:** Docker + Kubernetes
-- **Monitoring:** Sentry, Grafana, Prometheus
+  - LangChain for orchestrating browser automation decisions
+  - LLMs for page understanding and navigation strategy
+  - Vector Store for storing and comparing page patterns
+- **Browser Automation:**
+  - Playwright with AI-guided decision making
+  - Dynamic selector generation
+  - Content-aware interaction
 
-## 3. System Workflow
+## 3. Enhanced System Workflow
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant API as API Server
-    participant LLM as LLM Service
     participant PW as Playwright
-    participant DB as Database
-    participant CP as Company Portal
-
-    U->>API: Submit Application Request
-    activate API
-    API->>DB: Store Request
-    API->>LLM: Analyze Resume & Job Match
-    activate LLM
-    LLM-->>API: Match Score & Recommendations
-    deactivate LLM
+    participant DM as Decision Manager
+    participant LLM as LLM Service
+    participant LC as LangChain
     
-    alt Match Score > Threshold
-        API->>PW: Initialize Application Process
-        activate PW
-        PW->>CP: Navigate to Job Portal
-        CP-->>PW: Load Portal
-        PW->>CP: Search Job Position
-        CP-->>PW: Job Listing
-        
-        PW->>LLM: Verify Job Details
-        activate LLM
-        LLM-->>PW: Confirmation
-        deactivate LLM
-        
-        PW->>CP: Fill Application Form
-        CP-->>PW: Form Validation
-        
-        alt Form Valid
-            PW->>CP: Submit Application
-            CP-->>PW: Submission Confirmation
-            PW-->>API: Success Status
-        else Form Invalid
-            PW-->>API: Validation Error
-        end
-        deactivate PW
-    else Match Score < Threshold
-        API-->>U: Job Not Suitable
+    PW->>DM: Request Navigation Decision
+    DM->>LLM: Analyze Page Content
+    LLM-->>DM: Page Analysis
+    DM->>LC: Generate Navigation Strategy
+    LC-->>DM: Action Plan
+    DM-->>PW: Execute Actions
+    
+    PW->>DM: Validate Result
+    DM->>LLM: Verify Outcome
+    LLM-->>DM: Verification Result
+    
+    alt Success
+        DM-->>PW: Continue Flow
+    else Failure
+        DM->>LC: Generate Recovery Plan
+        LC-->>PW: Alternative Actions
     end
-    
-    API->>DB: Update Application Status
-    API-->>U: Application Status
-    deactivate API
 ```
 
-### 3.1 Input Processing
-- Resume parsing and analysis
-- Job requirement extraction
-- User preference processing
-- Initial compatibility assessment
+### 3.1 AI-Guided Navigation
+- Dynamic page analysis and understanding
+- Intelligent element identification
+- Context-aware decision making
+- Adaptive navigation strategies
 
-### 3.2 AI-Powered Analysis
-- Job-resume matching using LLMs
-- Semantic search for similar positions
-- Automatic content generation for applications
-- Decision making for application submission
+### 3.2 LLM Integration Points
+1. **Page Analysis:**
+   - Content understanding
+   - Element identification
+   - Form field mapping
+   - Validation rules extraction
 
-### 3.3 Application Process
-1. **Pre-Application Phase:**
-   - Job portal navigation
-   - Position verification
-   - Form identification
+2. **Decision Making:**
+   - Navigation choices
+   - Form filling strategies
+   - Error handling approaches
+   - Recovery planning
 
-2. **Application Submission:**
-   - Intelligent form filling
-   - Document attachment
-   - Validation checks
-   - Submission handling
+3. **Verification:**
+   - Success confirmation
+   - Error detection
+   - Output validation
+   - Progress tracking
 
-3. **Post-Application:**
-   - Status tracking
-   - Response monitoring
-   - Analytics collection
+## 4. AI Decision Making Framework
 
 ```mermaid
 flowchart TD
-    subgraph Input
-        R[Resume]
-        J[Job Requirements]
-        U[User Preferences]
+    subgraph PageAnalysis
+        PC[Page Content]
+        SP[Semantic Processing]
+        ER[Element Recognition]
     end
 
-    subgraph Processing
-        RP[Resume Parser]
-        JP[Job Parser]
-        MS[Match Scorer]
-        CG[Content Generator]
+    subgraph DecisionMaking
+        SA[Situation Analysis]
+        AP[Action Planning]
+        EP[Execution Planning]
     end
 
-    subgraph AIProcessing
-        VS[Vector Store]
-        LLM[LLM Service]
-        LC[LangChain]
-    end
-
-    subgraph ApplicationProcess
-        AF[Application Filler]
+    subgraph Execution
+        AC[Action Controller]
         VM[Validation Module]
-        SM[Submission Module]
+        RM[Recovery Module]
     end
 
-    subgraph Storage
-        DB[(Database)]
-        Cache[(Redis Cache)]
-    end
-
-    R --> RP
-    J --> JP
-    U --> MS
-
-    RP --> VS
-    JP --> VS
-    VS --> LLM
-    LLM --> LC
-
-    LC --> MS
-    MS --> CG
-    CG --> AF
-
-    AF --> VM
-    VM --> SM
-    SM --> DB
-    DB --> Cache
-
-    class AIProcessing,Processing,ApplicationProcess highlight
+    PC --> SP
+    SP --> ER
+    ER --> SA
+    SA --> AP
+    AP --> EP
+    EP --> AC
+    AC --> VM
+    VM --> RM
+    RM -.-> SA
 ```
 
-## 4. Advanced Features
+### 4.1 LLM-Guided Navigation
+- Context-aware page interpretation
+- Dynamic element selection
+- Intelligent form filling
+- Adaptive error handling
 
-### 4.1 Intelligent Matching
-- Resume-job compatibility scoring
-- Skill gap analysis
-- Experience mapping
-- Requirement prioritization
+### 4.2 Decision Points
+- Navigation choices
+- Form field mapping
+- Content validation
+- Error recovery strategies
 
-### 4.2 Security & Reliability
-- IP rotation system
-- Browser fingerprint randomization
-- Rate limiting and request throttling
-- Session management
-- Proxy pool integration
+## 5. Implementation Guidelines
 
-### 4.3 Error Handling
-- Comprehensive retry mechanism
-- Failure analysis
-- Alternative path execution
-- Error classification and reporting
+### 5.1 LangChain Integration
+```python
+from langchain.agents import Tool, AgentExecutor
+from langchain.chains import LLMChain
 
-## 5. State Management
-
-### 5.1 Application States
-- Initiated
-- Analysis
-- Ready
-- InProgress
-- Submitted
-- Failed
-- Complete
-
-```mermaid
-stateDiagram-v2
-    [*] --> Initiated
-    Initiated --> Analysis: Resume Uploaded
-    
-    state Analysis {
-        [*] --> JobMatching
-        JobMatching --> ContentGeneration
-        ContentGeneration --> [*]
-    }
-    
-    Analysis --> Ready: Match Score > Threshold
-    Analysis --> Rejected: Match Score < Threshold
-    
-    Ready --> InProgress: Start Application
-    
-    state InProgress {
-        [*] --> NavigatingPortal
-        NavigatingPortal --> FillingForm
-        FillingForm --> ValidatingForm
-        ValidatingForm --> SubmittingForm
-    }
-    
-    InProgress --> Submitted: Success
-    InProgress --> Failed: Error
-    
-    state Failed {
-        [*] --> RetryQueue
-        RetryQueue --> MaxRetries
-        RetryQueue --> BackToReady: Retry Available
-    }
-    
-    Submitted --> Complete
-    Failed --> Complete: Max Retries Reached
-    Rejected --> Complete
-    
-    Complete --> [*]
+class BrowserController:
+    def __init__(self):
+        self.tools = [
+            Tool(
+                name="analyze_page",
+                func=self.analyze_current_page,
+                description="Analyze current page content"
+            ),
+            Tool(
+                name="navigate",
+                func=self.execute_navigation,
+                description="Navigate to target element"
+            )
+        ]
+        
+        self.agent = AgentExecutor.from_agent_and_tools(
+            agent=self.create_agent(),
+            tools=self.tools,
+            verbose=True
+        )
 ```
 
-### 5.2 State Transitions
-- Validation checkpoints
-- Retry conditions
-- Completion criteria
-- Error state handling
+### 5.2 Playwright Integration
+```python
+class AIGuidedBrowser:
+    def __init__(self):
+        self.browser = playwright.chromium.launch()
+        self.page = self.browser.new_page()
+        self.controller = BrowserController()
+        
+    async def navigate_with_ai(self, target):
+        content = await self.page.content()
+        strategy = await self.controller.agent.run({
+            "page_content": content,
+            "target": target
+        })
+        await self.execute_strategy(strategy)
+```
 
-## 6. Monitoring & Analytics
+## 6. Configuration Updates
 
-### 6.1 System Metrics
-- Application success rate
-- Processing time analysis
-- Error rate tracking
-- Resource utilization
 
-### 6.2 Business Metrics
-- Job match quality
-- Application conversion rate
-- Response time analysis
-- Market trend analysis
+### 6.1 System Settings
+```python
+config = {
+    "ai_settings": {
+        "model": "gpt-4",
+        "temperature": 0.7,
+        "max_tokens": 1000
+    },
+    "browser_settings": {
+        "viewport": {"width": 1280, "height": 720},
+        "timeout": 30000,
+        "retry_attempts": 3
+    }
+}
+```
 
-## 7. Scalability & Performance
+## 7. Monitoring & Analytics Updates
 
-### 7.1 Horizontal Scaling
-- Worker node management
-- Load distribution
-- Resource allocation
-- Cache optimization
+### 7.1 AI Decision Metrics
+- Decision accuracy rate
+- Navigation success rate
+- Recovery effectiveness
+- Learning performance
 
-### 7.2 Performance Optimization
-- Request batching
-- Caching strategy
-- Database optimization
-- Async processing
+### 7.2 Integration Metrics
+- AI response time
+- Decision execution time
+- Recovery success rate
+- System adaptation rate
 
 ## 8. Future Enhancements
 
-### 8.1 Planned Features
-- Machine learning-based success prediction
-- Advanced document tailoring
-- Interview scheduling automation
-- Multi-platform integration
+### 8.1 Advanced AI Features
+- Reinforcement learning for navigation
+- Pattern recognition for forms
+- Adaptive decision making
+- Predictive error handling
 
-### 8.2 Research Areas
-- Natural language generation improvements
-- Enhanced bot detection avoidance
-- Automated skill assessment
-- Market analysis integration
+### 8.2 Integration Improvements
+- Real-time decision optimization
+- Dynamic strategy adaptation
+- Enhanced error recovery
+- Improved success prediction
 
-## 9. Setup & Deployment
+## 9. API Documentation
 
-### 9.1 Prerequisites
-- Docker and Kubernetes cluster
-- Database systems
-- Message queue system
-- AI service access
+### 9.1 Main Endpoints
 
-### 9.2 Configuration
-- Environment variables
-- Service connections
-- Security settings
-- Monitoring setup
-
-## 10. API Documentation
-
-### 10.1 Main Endpoints
 - `/api/v0/applications/initiate`
 - `/api/v0/applications/status`
 - `/api/v0/analytics`
 - `/api/v0/system/health`
 
-### 10.2 Authentication
+### 9.2 Authentication
+
 - JWT-based authentication
 - Role-based access control
 - API key management
 
-## 11. Ethical Considerations
-- Rate limiting compliance
-- Company policy respect
-- Data privacy
-- Fair use practices
 
-## 12. Support & Maintenance
+## 10. Conclusion
 
-### 12.1 Monitoring
-- Real-time system status
-- Error tracking
-- Performance metrics
-- Usage analytics
-
-### 12.2 Maintenance
-- Update procedures
-- Backup strategy
-- Recovery plans
-- System optimization
-
-## 13. Conclusion
 The Automated Job Application System represents a sophisticated solution for modern job seeking, combining AI capabilities with robust automation. Its modular architecture and scalable design ensure adaptability to evolving recruitment practices while maintaining reliability and efficiency.
+
+## To start the local server
+python -m uvicorn app.main:app --reload
