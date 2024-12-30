@@ -34,7 +34,7 @@ class AINavigator:
             self.llm = HuggingFaceEndpoint(
                 repo_id=self.repo_id,
                 # task="text-generation",
-                max_new_tokens=512,
+                max_new_tokens=300,
                 temperature=0.7,
                 top_p=0.95,
                 top_k=50,
@@ -57,9 +57,10 @@ class AINavigator:
 
     async def verify_state(self, page_content: Dict, target_state: str) -> Dict:
         """Verify if current page matches target state"""
+        logger.info(f"verify_state for: {target_state} ")
+        # logger.info()
         try:
-            template = """You must respond ONLY with a valid JSON object and no additional text or explanation.
-
+            template = """
             Task: Verify if the current webpage matches the target state.
             
             Current Page Content:
@@ -74,13 +75,16 @@ class AINavigator:
             3. Provide confidence score between 0 and 1
             4. Return ONLY a JSON object with the exact structure below
             5. Do not include any additional text or explanations
+            6. Return only 1 JSON object
             
             Required JSON Structure:
             {{
                 "success": boolean,
-                "confidence": float,
-                "missing_requirements": array
-            }}"""
+                "confidence": float
+            }}
+            Strict instruction: You must respond ONLY with one valid JSON object and no additional text or explanation needed.
+            
+            """
             
             prompt = PromptTemplate(
                 input_variables=["url", "title", "text", "target_state"],
@@ -116,11 +120,88 @@ class AINavigator:
         except Exception as e:
             logger.error(f"Error during state verification: {str(e)}")
             return {"success": False, "confidence": 0, "missing_requirements": [str(e)]}
+        
+    async def analyze_career_portal_results(self, search_results: List[Dict], company_name: str) -> Dict:
+        """
+        Analyze search results to identify the most likely career portal for a company.
+        
+        Args:
+            search_results: List of search results containing url, title, and description
+            company_name: Name of the company to analyze for
+            
+        Returns:
+            Dict containing status and best matching portal details
+        """
+        try:
+            template = """You must respond ONLY with one valid JSON object and no additional text or explanation.
+
+            Task: Analyze search results to identify the official career portal for {company_name}.
+            
+            Search Results: {search_results}
+            
+            Rules for identifying official career portals:
+            1. Look for URLs containing the company's official domain
+            2. Prioritize paths containing "careers", "jobs", "work-with-us"
+            3. Avoid third-party job boards (LinkedIn, Indeed, Glassdoor, etc.)
+            4. Consider SSL certification (https)
+            5. Look for official branding indicators in titles/descriptions
+            6. Consider URL structure and professionalism
+            
+            Return JSON in this exact format:
+            {{
+                "status": "success or error",
+                "best_match": {{
+                    "url": "best matching url",
+                    "confidence": between 0-1
+                }},
+                "alternatives": [
+                    {{
+                        "url": "alternative url",
+                        "confidence": between 0-1
+                    }}
+                ]
+            }}"""
+
+            prompt = PromptTemplate(
+                input_variables=["company_name", "search_results"],
+                template=template
+            )
+
+            chain = LLMChain(llm=self.llm, prompt=prompt)
+            response = await chain.arun(
+                company_name=company_name,
+                search_results=json.dumps(search_results)
+            )
+            logger.info(f"analyze_career_portal_results response: {response} ")
+            # logger.info()
+
+            # Clean and parse the response
+            response = response.strip()
+            start_idx = response.find('{')
+            end_idx = response.rfind('}') + 1
+            # logger.info(response)
+            if start_idx >= 0 and end_idx > start_idx:
+                json_str = response[start_idx:end_idx]
+                analysis = json.loads(json_str)
+                return analysis
+
+            return {
+                "status": "error",
+                "message": "Could not parse LLM response"
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing career portal results: {str(e)}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
 
     async def get_navigation_plan(self, page_content: Dict, target_state: str) -> Dict:
         """Generate navigation plan to reach target state"""
+        logger.info(f"Generate navigation plan to reach: {target_state} ")
         try:
-            template = """You must respond ONLY with a valid JSON object and no additional text or explanation.
+            template = """You must respond ONLY with one valid JSON object and no additional text or explanation.
 
             Task: Create a navigation plan to reach the target state.
             
@@ -131,23 +212,24 @@ class AINavigator:
             Target State: {desired_state}
             
             Rules:
-            1. Create a detailed plan to navigate from current state to target state
-            2. Each action must have a specific selector and action type
-            3. Return ONLY a JSON object with the exact structure below
-            4. Do not include any additional text or explanations
+            1. For form inputs, always use "fill" as the action type, never "type"
+            2. For buttons and links, use "click" as the action type
+            3. Each action must specify a clear selector
+            4. Wait actions can be specified with type "wait"
+            5. Return ONLY the exact JSON structure below
             
             Required JSON Structure:
-            {{
+            {
                 "status": "success",
                 "actions": [
-                    {{
-                        "type": string,
-                        "selector": string,
-                        "value": string,
-                        "description": string
-                    }}
+                    {
+                        "type": "fill or click or wait",
+                        "selector": "string",
+                        "value": "string for fill actions",
+                        "description": "string"
+                    }
                 ]
-            }}"""
+            }"""
             
             prompt = PromptTemplate(
                 input_variables=["current_url", "page_title", "page_elements", "desired_state"],
@@ -162,7 +244,7 @@ class AINavigator:
                 desired_state=target_state
             )
             
-            # Clean the response - remove any non-JSON content
+            # Clean and parse response
             response = response.strip()
             start_idx = response.find('{')
             end_idx = response.rfind('}') + 1
@@ -182,6 +264,7 @@ class AINavigator:
         except Exception as e:
             logger.error(f"Error generating navigation plan: {str(e)}")
             return {"status": "error", "message": str(e), "actions": []}
+
 
 
     async def analyze_search_results(self, page_content: Dict, company_name: str) -> Dict:

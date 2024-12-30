@@ -53,6 +53,7 @@ class JobApplicationProcessor:
                 application_data["position_title"],
                 application_data.get("location")
             )
+            logger.debug(relevant_jobs)
 
             self.active_applications[process_id]["jobs_found"] = len(relevant_jobs)
 
@@ -87,65 +88,89 @@ class JobApplicationProcessor:
             return {"status": "error", "message": str(e)}
 
     async def _find_career_portal(self, company_name: str) -> Optional[str]:
-        """Find and verify company career portal"""
-        search_results = await self.browser.search_career_portal(company_name)
-        if search_results["status"] == "error":
-            return None
-
-        # Analyze results to find best match
-        try:
-            # Basic filtering for relevant URLs
-            potential_portals = []
-            company_domain = company_name.lower().replace(" ", "")
+        """
+        Find and verify company career portal using AI analysis.
+        
+        Args:
+            company_name: Name of the company to search for
             
-            for result in search_results["results"]:
-                url = result["url"].lower()
-                title = result["title"].lower()
-                description = result.get("description", "").lower()
-                
-                # Keywords that suggest a careers page
-                career_keywords = ["career", "jobs", "work", "position", "opportunities", "employment"]
-                
-                # Check if URL or title contains company name and career-related keywords
-                is_relevant = (
-                    company_name.lower() in url or 
-                    company_name.lower() in title or 
-                    company_domain in url
-                ) and any(keyword in url or keyword in title or keyword in description 
-                         for keyword in career_keywords)
-                
-                if is_relevant:
-                    confidence = 0.0
-                    # Increase confidence based on various factors
-                    if company_name.lower() in url:
-                        confidence += 0.4
-                    if any(keyword in url for keyword in career_keywords):
-                        confidence += 0.3
-                    if "careers" in url or "jobs" in url:
-                        confidence += 0.2
-                    if not any(third_party in url.lower() for third_party in 
-                             ["indeed", "linkedin", "glassdoor", "monster", "dice"]):
-                        confidence += 0.1
-                        
-                    potential_portals.append({
-                        "url": result["url"],
-                        "confidence": confidence
-                    })
+        Returns:
+            Optional[str]: URL of the best matching career portal, or None if not found
+        """
+        try:
+            # Search for potential career portals
+            search_results = await self.browser.search_career_portal(company_name)
+            if search_results["status"] == "error":
+                logger.error(f"Error searching for career portal: {search_results.get('message')}")
+                return None
 
-            if potential_portals:
-                best_match = max(potential_portals, key=lambda x: x["confidence"])
-                if best_match["confidence"] > 0.6:  # Lowered threshold slightly
-                    logger.info(f"Found career portal for {company_name}: {best_match['url']}")
-                    return best_match["url"]
+            # Use AI to analyze the results
+            analysis = await self.ai.analyze_career_portal_results(
+                search_results["results"],
+                company_name
+            )
+
+            if analysis["status"] == "error":
+                logger.error(f"Error analyzing career portals: {analysis.get('message')}")
+                return None
+
+            best_match = analysis.get("best_match", {})
+            if best_match and best_match.get("confidence", 0) > 0.7:
+                logger.info(f"Found career portal for {company_name}: {best_match['url']}")
+                logger.info(f"Selection reasoning: {best_match.get('reasoning', [])}")
+                
+                # Verify the portal is accessible
+                try:
+                    await self.browser.page.goto(best_match['url'])
+                    await self.browser.wait_for_page_load()
                     
+                    logger.info("Navigated to career portal")
+                    
+                    # Additional verification of page content
+                    page_content = await self.browser.get_page_content()
+                    verification = await self.ai.verify_state(
+                        page_content,
+                        "career or job portal"
+                    )
+                    # logger.info("Career portal status verified",str(verification.get("success", False)) )
+                    
+                    if verification.get("success", False):
+                        return best_match['url']
+                    else:
+                        logger.warning("Selected portal failed content verification")
+                        
+                        # Try alternatives if available
+                        for alt in analysis.get("alternatives", []):
+                            if alt.get("confidence", 0) > 0.6:
+                                await self.browser.page.goto(alt['url'])
+                                await self.browser.wait_for_page_load()
+                                
+                                alt_verification = await self.ai.verify_state(
+                                    await self.browser.get_page_content(),
+                                    "career or job portal"
+                                )
+                                
+                                if alt_verification.get("success", False):
+                                    return alt['url']
+                
+                except Exception as e:
+                    logger.error(f"Error verifying career portal: {str(e)}")
+                    # If primary URL fails, try alternatives
+                    for alt in analysis.get("alternatives", []):
+                        if alt.get("confidence", 0) > 0.6:
+                            try:
+                                await self.browser.page.goto(alt['url'])
+                                await self.browser.wait_for_page_load()
+                                return alt['url']
+                            except:
+                                continue
+
             logger.warning(f"No suitable career portal found for {company_name}")
             return None
-                    
-        except Exception as e:
-            logger.error(f"Error analyzing search results: {str(e)}")
-            return None
 
-        return None
+        except Exception as e:
+            logger.error(f"Error in career portal search process: {str(e)}")
+            return None
 
     async def _search_relevant_jobs(
         self,
@@ -155,11 +180,13 @@ class JobApplicationProcessor:
     ) -> List[JobPosition]:
         """Search and collect relevant job positions"""
         # Navigate to career portal
+        
         await self.browser.page.goto(career_portal)
         await self.browser.wait_for_page_load()
+        logger.info("Started searching for jobs")
 
         # Find and interact with search functionality
-        search_result = await self.browser.navigate_with_ai("job_search")
+        search_result = await self.browser.navigate_with_ai("job search page")
         if search_result["status"] == "error":
             return []
 
@@ -168,6 +195,7 @@ class JobApplicationProcessor:
             search_query = f"{position_title} {location}"
         else:
             search_query = position_title
+        logger.info(f"search_query is: {search_query}")
 
         # Find search input and submit
         try:
@@ -181,6 +209,7 @@ class JobApplicationProcessor:
 
         # Extract job listings
         listings_result = await self.browser.analyze_job_listings()
+        logger.info(f"listings_result: {listings_result}")
         if listings_result["status"] == "error":
             return []
 

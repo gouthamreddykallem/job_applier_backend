@@ -79,6 +79,7 @@ class BrowserAutomation:
         """
         AI-guided navigation to reach a target state
         """
+        logger.info(f"navigate_with_ai start for: {target_state} ")
         try:
             if not hasattr(self, 'ai_navigator') or self.ai_navigator is None:
                 from app.core.llm import AINavigator
@@ -91,9 +92,11 @@ class BrowserAutomation:
             while current_attempt < max_attempts:
                 # Get current page content
                 page_content = await self.get_page_content()
+                # logger.info("Attempt no:  ", str(current_attempt))
                 
                 # Verify if we've reached the target state
                 state_verification = await self.ai_navigator.verify_state(page_content, target_state)
+                logger.info(f"state_verification: {state_verification.get('success', False)}")
                 if state_verification.get('success', False):
                     return {
                         "status": "success",
@@ -144,6 +147,7 @@ class BrowserAutomation:
         """
         Analyze job listings on the current page
         """
+        logger.info("Start of analyze_job_listings")
         try:
             page_content = await self.get_page_content()
             
@@ -332,7 +336,7 @@ class BrowserAutomation:
             }
 
     async def execute_action(self, action: Dict) -> bool:
-        """Execute AI-recommended action with retry mechanism"""
+        """Execute AI-recommended action with enhanced error handling and retries"""
         try:
             max_retries = 3
             retry_count = 0
@@ -341,29 +345,49 @@ class BrowserAutomation:
                 try:
                     action_type = action.get('type')
                     selector = action.get('selector')
-                    value = action.get('value')
+                    value = action.get('value', '')
                     
-                    # Wait for element to be ready
+                    # Wait for element with retry logic
                     if selector:
                         try:
-                            await self.page.wait_for_selector(selector, timeout=5000)
+                            element = await self.page.wait_for_selector(
+                                selector, 
+                                timeout=5000,
+                                state='visible'  # Ensure element is visible
+                            )
+                            if not element:
+                                retry_count += 1
+                                continue
                         except PlaywrightTimeout:
                             logger.warning(f"Selector timeout: {selector}")
                             retry_count += 1
                             continue
                     
                     if action_type == 'click':
+                        # Ensure element is clickable
+                        await self.page.wait_for_selector(selector, state='visible')
+                        # Scroll element into view
+                        await self.page.evaluate(f'document.querySelector("{selector}").scrollIntoView()')
+                        await asyncio.sleep(0.5)  # Brief pause after scroll
                         await self.page.click(selector)
+                        
                     elif action_type == 'fill':
                         await self.page.fill(selector, value)
+                        # Press Tab to trigger any JavaScript events
+                        await self.page.press(selector, 'Tab')
+                        
+                    elif action_type == 'wait':
+                        await asyncio.sleep(int(value) if value.isdigit() else 1)
+                        
                     elif action_type == 'navigate':
                         await self.page.goto(value)
                         await self.wait_for_page_load()
+                        
                     elif action_type == 'select':
                         await self.page.select_option(selector, value)
-                    else:
-                        logger.warning(f"Unknown action type: {action_type}")
-                        return False
+                        
+                    # Wait briefly after any action
+                    await asyncio.sleep(0.5)
                     
                     # Wait for any resulting navigation or dynamic content
                     await self.wait_for_page_load()
@@ -378,6 +402,7 @@ class BrowserAutomation:
         except Exception as e:
             logger.error(f"Error executing action: {str(e)}")
         return False
+
 
     async def search_career_portal(self, company_name: str) -> Dict:
         """Search for company career portal"""
